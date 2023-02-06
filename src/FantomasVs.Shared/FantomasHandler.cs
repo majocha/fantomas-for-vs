@@ -18,6 +18,7 @@ using ThreadedWaitDialogHelper = Microsoft.VisualStudio.Shell.ThreadedWaitDialog
 using Fantomas.Client;
 using FantomasResponseCode = Fantomas.Client.LSPFantomasServiceTypes.FantomasResponseCode;
 using Microsoft.VisualStudio.Threading;
+using Community.VisualStudio.Toolkit;
 
 namespace FantomasVs
 {
@@ -147,9 +148,11 @@ namespace FantomasVs
         public async Task<bool> FormatAsync(SnapshotSpan vspan, EditorCommandArgs args, CommandExecutionContext context, FormatKind kind)
         {
             var token = context.OperationContext.UserCancellationToken;
+
+            await VS.StatusBar.ShowMessageAsync("Initializing Fantomas formatting service...");
             var instance = await FantomasVsPackage.Instance.WithCancellation(token);
 
-            await SetStatusAsync("Formatting...", instance, token);
+            await VS.StatusBar.ShowMessageAsync("Formatting...");
             await Task.Yield();
 
             var buffer = args.TextView.TextBuffer;
@@ -235,7 +238,7 @@ namespace FantomasVs
                         {
                             hasError = true;
                             var error = response.Content.Value;
-                            await SetStatusAsync($"Could not format: {error.Replace(path, "")}", instance, token);
+                            await VS.StatusBar.ShowMessageAsync($"Could not format: {error.Replace(path, "")}");
                             await WriteLogAsync(error, token);
                             await FocusLogAsync(token);
                             break;
@@ -268,7 +271,7 @@ namespace FantomasVs
             {
                 hasError = true;
                 await WriteLogAsync($"The formatting operation failed:\n {ex}", token);
-                await SetStatusAsync($"Could not format: {ex.Message.Replace(path, "")}", instance, token);
+                await VS.StatusBar.ShowMessageAsync($"Could not format: {ex.Message.Replace(path, "")}");
             }
 
             args.TextView.Caret.MoveTo(
@@ -282,8 +285,7 @@ namespace FantomasVs
                     vspan.TranslateTo(args.TextView.TextSnapshot, SpanTrackingMode.EdgeInclusive),
                 false);
 
-            if (hasError) await Task.Delay(2000);
-            await SetStatusAsync("Ready.", instance, token);
+            if (!hasError) { await VS.StatusBar.ClearAsync(); }
 
             return hasDiff;
         }
@@ -386,18 +388,6 @@ namespace FantomasVs
             return FormatAsync(vspan, args, context, FormatKind.Document);
         }
 
-        protected async Task SetStatusAsync(string text, FantomasVsPackage instance, CancellationToken token)
-        {
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(token);
-            var statusBar = instance.Statusbar;
-            // Make sure the status bar is not frozen
-
-            if (statusBar.IsFrozen(out var frozen) == VSConstants.S_OK && frozen != 0)
-                statusBar.FreezeOutput(0);
-
-            // Set the status bar text and make its display static.
-            statusBar.SetText(text);
-        }
 
         #endregion
 
