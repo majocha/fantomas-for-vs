@@ -2,9 +2,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using static FantomasVs.OptionsProvider;
 using Task = System.Threading.Tasks.Task;
 
 namespace FantomasVs
@@ -20,10 +20,11 @@ namespace FantomasVs
     [Guid(FantomasVsPackage.PackageGuidString)]
 
     // Auto load only if a solution is open, this is important too
-    [ProvideAutoLoad(UIContextGuids80.SolutionExists, PackageAutoLoadFlags.BackgroundLoad)]
+    //[ProvideAutoLoad(UIContextGuids80.SolutionExists, PackageAutoLoadFlags.BackgroundLoad)]
 
     // Options page
-    [ProvideOptionPage(typeof(FantomasOptionsPage), "F# Tools", "Formatting", 0, 0, supportsAutomation: true)]
+    [ProvideProfile(typeof(OptionsProvider.FormattingOptions), "F# Tools", "Formatting", 0, 0, true)]
+    [ProvideOptionPage(typeof(OptionsProvider.FormattingOptions), "F# Tools", "Formatting", 0, 0, supportsAutomation: true)]
 
     public sealed partial class FantomasVsPackage : AsyncPackage
     {
@@ -31,13 +32,6 @@ namespace FantomasVs
         /// FantomasVsPackage GUID string.
         /// </summary>
         public const string PackageGuidString = "74927147-72e8-4b47-a80d-5568807d6878";
-
-        private static readonly TaskCompletionSource<FantomasVsPackage> _instance = new();
-        public static Task<FantomasVsPackage> Instance => _instance.Task;
-
-        public FantomasOptionsPage Options => GetDialogPage(typeof(FantomasOptionsPage)) as FantomasOptionsPage ?? new FantomasOptionsPage();
-
-        public IVsThreadedWaitDialogFactory DialogFactory { get; private set; }
 
         #region Package Members
 
@@ -51,16 +45,6 @@ namespace FantomasVs
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {            
             Trace.WriteLine("Fantomas Vs Package Loaded");
-
-            DialogFactory = await this.GetServiceAsync<SVsThreadedWaitDialogFactory, IVsThreadedWaitDialogFactory>();            
-            
-            // signal that package is ready
-            _instance.SetResult(this);
-
-            // When initialized asynchronously, the current thread may be a background thread at this point.
-            // Do any initialization that requires the UI thread after switching to the UI thread.
-            await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-
         }
 
         #endregion
