@@ -5,13 +5,13 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Task = System.Threading.Tasks.Task;
 
 using Microsoft.VisualStudio.Commanding;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor.Commanding;
 using Microsoft.VisualStudio.Text.Editor.Commanding.Commands;
 using Microsoft.VisualStudio.Utilities;
-using ThreadHelper = Microsoft.VisualStudio.Shell.ThreadHelper;
 
 using Fantomas.Client;
 using static Fantomas.Client.Contracts;
@@ -34,12 +34,12 @@ namespace FantomasVs
         ICommandHandler<SaveCommandArgs>
     {
         [ImportingConstructor]
-        public FantomasHandler(FantomasService fantomasService )
+        public FantomasHandler(FantomasService fantomasService)
         {
             service = fantomasService;
         }
-        private FantomasService service;
 
+        private FantomasService service;
 
         public string DisplayName => "Automatic Formatting";
 
@@ -154,14 +154,9 @@ namespace FantomasVs
 
         public bool CommandHandled => true;
 
-        const string outputPaneTitle = "F# Formatting";
-
-        public async Task<bool> FormatAsync(SnapshotSpan vspan, EditorCommandArgs args, CancellationToken token, FormatKind kind)
+        public async Task<bool> FormatAsync(SnapshotSpan vspan, EditorCommandArgs args, CommandExecutionContext context, FormatKind kind)
         {
-            var output = await VS.Windows.CreateOutputWindowPaneAsync(outputPaneTitle, lazyCreate: true);
-
-            await VS.StatusBar.ShowMessageAsync("Initializing Fantomas formatting service...");
-
+            var token = context.OperationContext.UserCancellationToken;
             await VS.StatusBar.ShowMessageAsync("Formatting...");
             await Task.Yield();
 
@@ -216,25 +211,28 @@ namespace FantomasVs
                         break;
                     case FantomasResponseCode.ToolNotFound:
                         {
-                            var view = new InstallChoiceWindow();                            
+                            await VS.StatusBar.ShowMessageAsync("Fantomas tool not installed");
+                            // prevent editor command wait dialog
+                            context.OperationContext.TakeOwnership();
+                            var view = new InstallChoiceWindow();
                             var result = await InstallAsync(view.GetDialogAction(), workingDir, token);
+                            await VS.StatusBar.ClearAsync();
                             switch (result)
                             {
                                 case InstallResult.Succeded:
                                     {
                                         InstallResultDialog.ShowDialog("Fantomas Tool was succesfully installed!");
-                                        await FormatAsync(vspan, args, token, kind);
+                                        await VS.StatusBar.ShowMessageAsync("Starting Fantomas instance...");
+                                        await FormatAsync(vspan, args, context, kind);
                                         break;
                                     }
                                 case InstallResult.Failed:
                                     {
-                                        hasError = true;
                                         InstallResultDialog.ShowDialog("Fantomas Tool could not be installed. You may not have a tool manifest set up. Please check the log for details.");
-                                        await output.ActivateAsync();
+                                        await FocusLogAsync();
                                         break;
                                     }
                             }
-
                             break;
                         }
 
@@ -245,14 +243,14 @@ namespace FantomasVs
                             hasError = true;
                             var error = response.Content.Value;
                             await VS.StatusBar.ShowMessageAsync($"Could not format: {error.Replace(path, "")}");
-                            await output.WriteLineAsync(error);
-                            await output.ActivateAsync();
+                            await WriteLogAsync(error);
+                            await FocusLogAsync();
                             break;
                         }
                     case FantomasResponseCode.DaemonCreationFailed:
                         {
-                            await output.WriteLineAsync($"Creating the Fantomas Daemon failed:\n{response.Content?.Value}");
-                            await output.ActivateAsync();
+                            await WriteLogAsync($"Creating the Fantomas Daemon failed:\n{response.Content?.Value}");
+                            await FocusLogAsync();
                             hasError = true;
                             break;
                         }
@@ -260,23 +258,23 @@ namespace FantomasVs
                         throw new NotSupportedException($"The {nameof(FantomasResponseCode)} value '{response.Code}' is unexpected.\n Error: {response.Content?.Value}");
                 }
 
-                if(hasError)
+                if (hasError)
                 {
-                    await output.WriteLineAsync("Attempting to find Fantomas Tool...");
+                    await WriteLogAsync("Attempting to find Fantomas Tool...");
                     var folder = LSPFantomasServiceTypes.Folder.NewFolder(workingDir);
                     var toolLocation = FantomasToolLocator.findFantomasTool(folder);
                     var result = toolLocation.IsError ? $"Failed to find tool: {toolLocation.ErrorValue}" : $"Found at: {toolLocation.ResultValue}";
-                    await output.WriteLineAsync(result);
+                    await WriteLogAsync(result);
                 }
             }
             catch (NotSupportedException ex)
             {
-                await output.WriteLineAsync($"The operation is not supported:\n {ex.Message}");
+                await WriteLogAsync($"The operation is not supported:\n {ex.Message}");
             }
             catch (Exception ex)
             {
                 hasError = true;
-                await output.WriteLineAsync($"The formatting operation failed:\n {ex}");
+                await WriteLogAsync($"The formatting operation failed:\n {ex}");
                 await VS.StatusBar.ShowMessageAsync($"Could not format: {ex.Message.Replace(path, "")}");
             }
 
@@ -332,6 +330,7 @@ namespace FantomasVs
 
         public async Task<InstallResult> InstallAsync(InstallAction installAction, string workingDir, CancellationToken token)
         {
+            await VS.StatusBar.ShowMessageAsync("Installing Fantomas tool...");
             async Task<InstallResult> LaunchUrl(string uri)
             {
                 try
@@ -340,8 +339,7 @@ namespace FantomasVs
                 }
                 catch (Exception ex)
                 {
-                    var pane = await VS.Windows.CreateOutputWindowPaneAsync(outputPaneTitle, lazyCreate: true);
-                    await pane.WriteLineAsync($"Failed to launch url: {uri}\n{ex}");
+                    await WriteLogAsync($"Failed to launch url: {uri}\n{ex}");
                 }
 
                 return InstallResult.Skipped;
@@ -349,14 +347,13 @@ namespace FantomasVs
 
             async Task<InstallResult> LaunchDotnet(string caption, string args)
             {
-                var pane = await VS.Windows.CreateOutputWindowPaneAsync(outputPaneTitle, lazyCreate: true);
-                await pane.WriteLineAsync(caption);
-                await pane.WriteLineAsync("Running dotnet installation...");
+                await WriteLogAsync(caption);
+                await WriteLogAsync("Running dotnet installation...");
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(token);
                 var fac = (IVsThreadedWaitDialogFactory)await VS.Services.GetThreadedWaitDialogAsync();
                 using var session = fac.StartWaitDialog(caption);
                 var (success, output) = await RunProcessAsync("dotnet", args, workingDir, session.UserCancellationToken);
-                await pane.WriteLineAsync(output);
+                await WriteLogAsync(output);
                 return success ? InstallResult.Succeded : InstallResult.Failed;
             }
 
@@ -393,16 +390,41 @@ namespace FantomasVs
         {
             var snapshot = args.TextView.TextSnapshot;
             var vspan = new SnapshotSpan(snapshot, new Span(0, snapshot.Length));
-            return FormatAsync(vspan, args, context.OperationContext.UserCancellationToken, FormatKind.Document);
+            return FormatAsync(vspan, args, context, FormatKind.Document);
         }
 
         #endregion
+
+        #region Output Window
+
+        public Task WriteLogAsync(string text) => OutputLogging.LogTextAsync(text);
+
+        public Task FocusLogAsync() => OutputLogging.BringToFrontAsync();
+
+        #endregion
+
+        public void LogTask<T>(Func<Task<T>> asyncMethod)
+        {
+            try
+            {
+                ThreadHelper.JoinableTaskFactory.Run(asyncMethod);
+            }
+            catch (Exception ex)
+            {
+                _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await WriteLogAsync(ex.ToString());
+                    await Task.Delay(2000);
+                    await VS.StatusBar.ClearAsync();
+                });
+            }
+        }
 
         #region Format Document
 
         public bool ExecuteCommand(FormatDocumentCommandArgs args, CommandExecutionContext context)
         {
-            ThreadHelper.JoinableTaskFactory.Run(() => FormatAsync(args, context));
+            LogTask(() => FormatAsync(args, context));
             return CommandHandled;
         }
 
@@ -431,7 +453,7 @@ namespace FantomasVs
                 return false;
 
             var vspan = new SnapshotSpan(args.TextView.TextSnapshot, selections.Single().Span);
-            ThreadHelper.JoinableTaskFactory.Run(() => FormatAsync(vspan, args, executionContext.OperationContext.UserCancellationToken, FormatKind.Selection));
+            LogTask(() => FormatAsync(vspan, args, executionContext, FormatKind.Selection));
             return CommandHandled;
         }
 
@@ -446,28 +468,28 @@ namespace FantomasVs
 
         public bool ExecuteCommand(SaveCommandArgs args, CommandExecutionContext executionContext)
         {
-            ThreadHelper.JoinableTaskFactory.Run(() => FormatOnSaveAsync(args, executionContext));
+            LogTask(() => FormatOnSaveAsync(args, executionContext));
             return false;
         }
 
-        protected async Task FormatOnSaveAsync(SaveCommandArgs args, CommandExecutionContext executionContext)
+        protected async Task<bool> FormatOnSaveAsync(SaveCommandArgs args, CommandExecutionContext executionContext)
         {
             var options = await Formatting.GetLiveInstanceAsync();
             if (!options.FormatOnSave)
-                return;
+                return false;
 
             var hasDiff = await FormatAsync(args, executionContext);
 
             if (!hasDiff || !options.CommitChanges)
-                return;
+                return false;
 
             var buffer = args.SubjectBuffer;
             var document = buffer.Properties.GetProperty<ITextDocument>(typeof(ITextDocument));
 
             document?.Save();
+            return true;
         }
 
         #endregion
     }
 }
-

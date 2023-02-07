@@ -23,6 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)InstallResultDialog.xaml.cs">
       <DependentUpon>InstallResultDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)OutputLogging.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Theme.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PredefinedCommandHandlerNames.cs" />
   </ItemGroup>
