@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-using static FantomasVs.OptionsProvider;
 using Task = System.Threading.Tasks.Task;
 
 namespace FantomasVs

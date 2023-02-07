@@ -12,7 +12,6 @@ using Microsoft.VisualStudio.Text.Editor.Commanding;
 using Microsoft.VisualStudio.Text.Editor.Commanding.Commands;
 using Microsoft.VisualStudio.Utilities;
 using ThreadHelper = Microsoft.VisualStudio.Shell.ThreadHelper;
-using ThreadedWaitDialogHelper = Microsoft.VisualStudio.Shell.ThreadedWaitDialogHelper;
 
 using Fantomas.Client;
 using static Fantomas.Client.Contracts;

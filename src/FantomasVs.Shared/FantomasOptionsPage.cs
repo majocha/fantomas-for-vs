@@ -1,6 +1,4 @@
-﻿using System;
-using System.ComponentModel;
-using Microsoft.VisualStudio.Shell;
+﻿using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Community.VisualStudio.Toolkit;
 
