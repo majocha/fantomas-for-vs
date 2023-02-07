@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Fantomas.Client;
-using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Task = System.Threading.Tasks.Task;
@@ -41,9 +39,6 @@ namespace FantomasVs
 
         public IVsThreadedWaitDialogFactory DialogFactory { get; private set; }
 
-        private Lazy<Contracts.FantomasService> _fantomasService = new (() => new LSPFantomasService.LSPFantomasService());
-        public Contracts.FantomasService FantomasService => _fantomasService.Value;
-
         #region Package Members
 
         /// <summary>
@@ -66,24 +61,6 @@ namespace FantomasVs
             // Do any initialization that requires the UI thread after switching to the UI thread.
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                try
-                {
-                    FantomasService.Dispose();
-                    Trace.WriteLine("Fantomas Vs Package Disposed");
-                }
-                catch (Exception ex)
-                {
-                    Trace.WriteLine(ex);
-                }
-            }
-
-            base.Dispose(disposing);
         }
 
         #endregion

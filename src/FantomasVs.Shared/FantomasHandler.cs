@@ -15,6 +15,7 @@ using ThreadHelper = Microsoft.VisualStudio.Shell.ThreadHelper;
 using ThreadedWaitDialogHelper = Microsoft.VisualStudio.Shell.ThreadedWaitDialogHelper;
 
 using Fantomas.Client;
+using static Fantomas.Client.Contracts;
 using FantomasResponseCode = Fantomas.Client.LSPFantomasServiceTypes.FantomasResponseCode;
 using Microsoft.VisualStudio.Threading;
 using Community.VisualStudio.Toolkit;
@@ -32,12 +33,14 @@ namespace FantomasVs
         ICommandHandler<SaveCommandArgs>
     {
         [ImportingConstructor]
-        public FantomasHandler(JoinableTaskContext joinableTaskContext)
+        public FantomasHandler(JoinableTaskContext joinableTaskContext, FantomasService fantomasService )
         {
             JoinableTaskFactory = joinableTaskContext.Factory;
+            service = fantomasService;
         }
         private JoinableTaskFactory JoinableTaskFactory { get; }
-        
+        private FantomasService service;
+
 
         public string DisplayName => "Automatic Formatting";
 
@@ -167,7 +170,6 @@ namespace FantomasVs
             var buffer = args.TextView.TextBuffer;
             var caret = args.TextView.Caret.Position;
 
-            var service = instance.FantomasService;
             var fantopts = instance.Options;
             var document = buffer.Properties.GetProperty<ITextDocument>(typeof(ITextDocument));
             var path = document.FilePath;
