@@ -39,7 +39,6 @@ namespace FantomasVs
 
         public FantomasOptionsPage Options => GetDialogPage(typeof(FantomasOptionsPage)) as FantomasOptionsPage ?? new FantomasOptionsPage();
 
-        public IVsOutputWindow OutputPane { get; private set; }
         public IVsThreadedWaitDialogFactory DialogFactory { get; private set; }
 
         private Lazy<Contracts.FantomasService> _fantomasService = new (() => new LSPFantomasService.LSPFantomasService());
@@ -58,7 +57,6 @@ namespace FantomasVs
         {            
             Trace.WriteLine("Fantomas Vs Package Loaded");
 
-            OutputPane = await this.GetServiceAsync<SVsOutputWindow, IVsOutputWindow>();
             DialogFactory = await this.GetServiceAsync<SVsThreadedWaitDialogFactory, IVsThreadedWaitDialogFactory>();            
             
             // signal that package is ready
