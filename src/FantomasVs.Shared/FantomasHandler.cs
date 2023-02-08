@@ -14,7 +14,6 @@ using Microsoft.VisualStudio.Text.Editor.Commanding.Commands;
 using Microsoft.VisualStudio.Utilities;
 
 using Fantomas.Client;
-using static Fantomas.Client.Contracts;
 using FantomasResponseCode = Fantomas.Client.LSPFantomasServiceTypes.FantomasResponseCode;
 using Microsoft.VisualStudio.Threading;
 using Community.VisualStudio.Toolkit;
@@ -34,12 +33,12 @@ namespace FantomasVs
         ICommandHandler<SaveCommandArgs>
     {
         [ImportingConstructor]
-        public FantomasHandler(FantomasService fantomasService)
+        public FantomasHandler(Contracts.FantomasService fantomasService)
         {
             service = fantomasService;
         }
 
-        private FantomasService service;
+        private Contracts.FantomasService service;
 
         public string DisplayName => "Automatic Formatting";
 
